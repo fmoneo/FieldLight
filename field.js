@@ -9,7 +9,7 @@ class SoccerField {
     this.scene = scene;
     this.length = length; // meters (X axis)
     this.width = width;   // meters (Z axis in Three.js, Y axis in user UI)
-    
+
     // Group holding all pitch objects
     this.group = new THREE.Group();
     this.scene.add(this.group);

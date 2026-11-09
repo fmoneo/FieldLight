@@ -182,7 +182,7 @@ class App {
     const bindSlider = (sliderId, valId, unit, prop, transform = v => v) => {
       const slider = document.getElementById(sliderId);
       const valDisplay = document.getElementById(valId);
-      
+
       const onInput = () => {
         const val = parseFloat(slider.value);
         valDisplay.textContent = `${transform(val)} ${unit}`;
@@ -558,14 +558,14 @@ class App {
         liveBest.textContent = `${prog.bestCoverage.toFixed(1)}%`;
         evalCount.textContent = prog.iteration;
         progressText.textContent = `Testing combinations... (${prog.iteration}/${prog.total})`;
-        
+
         // Live update score card during solving
         this.recalculatePhotometrics();
       },
       onComplete: (result, err) => {
         btn.disabled = false;
         btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Auto-Optimize Active Lights`;
-        
+
         if (err) {
           this.showToast(err);
           progressBox.classList.add('hidden');
@@ -607,7 +607,7 @@ class App {
 
       const card = document.createElement('div');
       card.className = `light-item-card ${isSelected ? 'selected' : ''} ${!light.enabled ? 'disabled' : ''}`;
-      
+
       card.innerHTML = `
         <div class="light-item-left">
           <div class="light-item-dot" style="${light.enabled ? `background: #${light.color.toString(16).padStart(6, '0')}` : ''}"></div>
@@ -659,7 +659,7 @@ class App {
 
     editor.style.display = 'flex';
     document.getElementById('editor-light-title').textContent = `${selected.name}`;
-    
+
     // Preset Type badge
     const badge = document.getElementById('editor-light-type-badge');
     const preset = LIGHT_PRESETS[selected.presetType];
