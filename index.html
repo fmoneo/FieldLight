@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FieldLight 3D - Soccer Pitch Lighting Simulator & Optimizer</title>
+  
+  <!-- Three.js and OrbitControls -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app-container">
+    <!-- 3D WebGL Canvas Container -->
+    <div id="canvas-container">
+      <canvas id="webgl-canvas"></canvas>
+
+      <!-- Viewport HUD Overlay -->
+      <div id="viewport-hud">
+        <!-- Top HUD: Camera presets & View Modes -->
+        <div class="hud-top-bar">
+          <div class="hud-group">
+            <span class="hud-label">CAMERA</span>
+            <button class="hud-btn active" id="btn-cam-persp" title="Perspective View">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+              Perspective
+            </button>
+            <button class="hud-btn" id="btn-cam-top" title="Top-Down Plan View">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="3" x2="12" y2="21"/></svg>
+              Top-Down
+            </button>
+            <button class="hud-btn" id="btn-cam-side" title="Touchline Sideline View">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="10" rx="1"/><line x1="12" y1="2" x2="12" y2="22"/></svg>
+              Sideline
+            </button>
+            <button class="hud-btn" id="btn-cam-goal" title="Behind Goal View">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 20V4h18v16"/><path d="M7 20V10h10v10"/><line x1="3" y1="20" x2="21" y2="20"/></svg>
+              Behind Goal
+            </button>
+            <button class="hud-btn" id="btn-cam-fixture" title="Look through selected light fixture">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/></svg>
+              Light POV
+            </button>
+          </div>
+
+          <div class="hud-group">
+            <span class="hud-label">TOOLS</span>
+            <button class="hud-toggle-btn active" id="btn-toggle-helpers" title="Toggle Light Cones & Aim Lines">
+              <span class="toggle-indicator"></span> Cones & Beams
+            </button>
+            <button class="hud-toggle-btn active" id="btn-toggle-poles" title="Toggle 3D Pole/Tripod Fixtures">
+              <span class="toggle-indicator"></span> 3D Poles
+            </button>
+            <button class="hud-toggle-btn active" id="btn-toggle-probe" title="Point Lux Inspector Probe on Hover">
+              <span class="toggle-indicator"></span> Lux Probe
+            </button>
+            <button class="hud-btn" id="btn-export-png" title="Export High-Res Screenshot PNG">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              Snapshot
+            </button>
+          </div>
+        </div>
+
+        <!-- Field Info Pill & Probe -->
+        <div class="hud-info-container">
+          <div class="hud-info-pill" id="field-info-pill">
+            Pitch: <span id="hud-field-dim">105m × 68m</span> | Lights: <span id="hud-active-lights">0 Active</span>
+          </div>
+          <div class="hud-probe-pill hidden" id="hud-probe-pill">
+            <span class="probe-target-icon">🎯</span> <span id="probe-coords">X: 0.0m, Y: 0.0m</span> | <span class="probe-lux" id="probe-lux-val">0 lx</span>
+          </div>
+        </div>
+
+        <!-- Heatmap Colorbar Legend -->
+        <div id="heatmap-legend" class="heatmap-legend hidden">
+          <div class="legend-header">
+            <span>ILLUMINANCE (LUX)</span>
+            <span id="legend-threshold-tag">Threshold: 50 lx</span>
+          </div>
+          <div class="legend-bar"></div>
+          <div class="legend-ticks">
+            <span>0</span>
+            <span>25</span>
+            <span>50</span>
+            <span>100</span>
+            <span>200</span>
+            <span>350</span>
+            <span>500+</span>
+          </div>
+        </div>
+
+        <!-- Live Status Toast -->
+        <div id="status-toast" class="status-toast">Ready</div>
+      </div>
+    </div>
+
+    <!-- Control Panel Sidebar -->
+    <aside id="sidebar">
+      <!-- App Header -->
+      <header class="sidebar-header">
+        <div class="logo-area">
+          <div class="logo-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+            </svg>
+          </div>
+          <div>
+            <h1 class="logo-title">FieldLight <span>3D</span></h1>
+            <p class="logo-sub">Soccer Pitch Lighting CAD & Solver</p>
+          </div>
+        </div>
+        <div class="header-badges">
+          <span class="badge badge-glow" id="render-fps-badge">60 FPS</span>
+        </div>
+      </header>
+
+      <!-- Navigation Tabs -->
+      <nav class="sidebar-tabs">
+        <button class="tab-btn active" data-tab="tab-lights">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v8"/><path d="m4.93 10.93 1.41 1.41"/><path d="M2 18h2"/><path d="M20 18h2"/><path d="m19.07 10.93-1.41 1.41"/><path d="M12 16a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/><path d="M12 18v4"/><path d="m4.93 17.07 1.41-1.41"/><path d="m19.07 17.07-1.41-1.41"/></svg>
+          Lights
+        </button>
+        <button class="tab-btn" data-tab="tab-field">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="12" y1="4" x2="12" y2="20"/><circle cx="12" cy="12" r="4"/></svg>
+          Field & Mode
+        </button>
+        <button class="tab-btn" data-tab="tab-solver">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          Score & Solver
+        </button>
+      </nav>
+
+      <!-- Content Area with Scroll -->
+      <div class="sidebar-content">
+
+        <!-- ================= TAB 1: LIGHTS MANAGEMENT ================= -->
+        <section id="tab-lights" class="tab-pane active">
+          <!-- Add Light Card -->
+          <div class="panel-card highlight-card">
+            <div class="card-header">
+              <span class="card-title">Add Light Fixture</span>
+              <span class="card-tag">Presets & Custom</span>
+            </div>
+            
+            <div class="form-row">
+              <label for="select-preset">Light Type Preset</label>
+              <select id="select-preset" class="form-select">
+                <option value="preset-basic">Preset 1: Basic Work Light (10,000 lm, 2m)</option>
+                <option value="preset-tripod">Preset 2: Pro Tripod 3-Head (21,000 lm, 2m)</option>
+                <option value="preset-stadium" selected>Preset 3: Stadium Flood Light (112,000 lm, 18m)</option>
+                <option value="preset-custom">Custom Configurable Light</option>
+              </select>
+            </div>
+
+            <div class="button-row">
+              <button id="btn-add-light" class="btn btn-primary btn-full">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add Light to Pitch
+              </button>
+            </div>
+
+            <!-- Quick Template Setups -->
+            <div class="quick-templates">
+              <span class="sub-label">Instant Full Layouts:</span>
+              <div class="template-chips">
+                <button class="chip-btn" id="chip-4corner" title="4 Stadium Floodlights at pitch corners">4 Corner Masts</button>
+                <button class="chip-btn" id="chip-6mast" title="6 Stadium Poles along touchlines">6 Sideline Masts</button>
+                <button class="chip-btn" id="chip-mobile" title="4 Mobile Tripods around training zone">Mobile Training</button>
+                <button class="chip-btn chip-danger" id="chip-clear" title="Remove all lights">Clear All</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Active Lights List / Accordion -->
+          <div class="panel-card">
+            <div class="card-header">
+              <span class="card-title">Configured Lights (<span id="lights-count">0</span>)</span>
+              <span class="hint-text">Click a card to select & edit</span>
+            </div>
+
+            <div id="lights-list" class="lights-list-container">
+              <!-- Dynamically populated light cards -->
+            </div>
+          </div>
+
+          <!-- Detailed Editor for Selected Light -->
+          <div id="selected-light-editor" class="panel-card selected-editor-card">
+            <div class="card-header card-header-action">
+              <div>
+                <span class="card-title" id="editor-light-title">Light #1 Configuration</span>
+                <span class="badge" id="editor-light-type-badge">Stadium Flood Light</span>
+              </div>
+              <div class="card-actions">
+                <button class="icon-action-btn" id="btn-duplicate-selected" title="Duplicate light">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                </button>
+                <button class="icon-action-btn btn-danger" id="btn-delete-selected" title="Delete light">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Parameters Grid -->
+            <div class="slider-group">
+              <div class="slider-header">
+                <span class="slider-label">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                  Height (Z coordinate)
+                </span>
+                <span class="slider-val" id="val-light-z">18.0 m</span>
+              </div>
+              <input type="range" id="slider-light-z" min="1" max="35" step="0.5" value="18" class="range-slider">
+              <span class="slider-tip">Pole/stand elevation above pitch ground</span>
+            </div>
+
+            <div class="slider-group">
+              <div class="slider-header">
+                <span class="slider-label">Position X (Length / Lateral)</span>
+                <span class="slider-val" id="val-light-x">-56.0 m</span>
+              </div>
+              <input type="range" id="slider-light-x" min="-80" max="80" step="0.5" value="-56" class="range-slider">
+            </div>
+
+            <div class="slider-group">
+              <div class="slider-header">
+                <span class="slider-label">Position Y (Width / Longitudinal)</span>
+                <span class="slider-val" id="val-light-y">-38.0 m</span>
+              </div>
+              <input type="range" id="slider-light-y" min="-60" max="60" step="0.5" value="-38" class="range-slider">
+            </div>
+
+            <!-- Aim Target -->
+            <div class="slider-group highlight-param">
+              <div class="slider-header">
+                <span class="slider-label">Target Aim X (Field Aim Point)</span>
+                <span class="slider-val" id="val-target-x">-25.0 m</span>
+              </div>
+              <input type="range" id="slider-target-x" min="-55" max="55" step="0.5" value="-25" class="range-slider range-slider-target">
+            </div>
+
+            <div class="slider-group highlight-param">
+              <div class="slider-header">
+                <span class="slider-label">Target Aim Y (Field Aim Point)</span>
+                <span class="slider-val" id="val-target-y">-15.0 m</span>
+              </div>
+              <input type="range" id="slider-target-y" min="-36" max="36" step="0.5" value="-15" class="range-slider range-slider-target">
+            </div>
+
+            <!-- Photometrics -->
+            <div class="slider-group">
+              <div class="slider-header">
+                <span class="slider-label">Intensity / Flux (Lumens)</span>
+                <span class="slider-val" id="val-light-lumens">112,000 lm</span>
+              </div>
+              <input type="range" id="slider-light-lumens" min="5000" max="250000" step="1000" value="112000" class="range-slider">
+            </div>
+
+            <div class="slider-group">
+              <div class="slider-header">
+                <span class="slider-label">Beam Spread / Angle (Cone)</span>
+                <span class="slider-val" id="val-light-angle">50°</span>
+              </div>
+              <input type="range" id="slider-light-angle" min="15" max="150" step="1" value="50" class="range-slider">
+            </div>
+
+            <div class="slider-group">
+              <div class="slider-header">
+                <span class="slider-label">Penumbra / Edge Softness</span>
+                <span class="slider-val" id="val-light-penumbra">40%</span>
+              </div>
+              <input type="range" id="slider-light-penumbra" min="0" max="100" step="5" value="40" class="range-slider">
+            </div>
+
+            <!-- Quick Aim Shortcuts for Selected Light -->
+            <div class="quick-aim-row">
+              <span class="sub-label">Quick Aim to:</span>
+              <button class="btn btn-xs" id="btn-aim-center">Center Spot</button>
+              <button class="btn btn-xs" id="btn-aim-near-goal">Near Goal</button>
+              <button class="btn btn-xs" id="btn-aim-far-goal">Far Goal</button>
+              <button class="btn btn-xs" id="btn-aim-quadrant">Nearest Quadrant</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= TAB 2: FIELD & MODE ================= -->
+        <section id="tab-field" class="tab-pane">
+          <!-- Field Dimensions -->
+          <div class="panel-card">
+            <div class="card-header">
+              <span class="card-title">Field Dimensions</span>
+              <span class="card-tag">Customizable</span>
+            </div>
+            <p class="card-desc">Define the dimensions of the soccer field in meters. Standard FIFA recommendation is 105m × 68m.</p>
+
+            <div class="inputs-grid-2">
+              <div class="form-row">
+                <label for="input-field-length">Length (meters)</label>
+                <input type="number" id="input-field-length" min="40" max="130" value="105" step="1" class="form-input">
+                <span class="input-unit">m</span>
+              </div>
+              <div class="form-row">
+                <label for="input-field-width">Width (meters)</label>
+                <input type="number" id="input-field-width" min="25" max="95" value="68" step="1" class="form-input">
+                <span class="input-unit">m</span>
+              </div>
+            </div>
+
+            <div class="button-row">
+              <button id="btn-apply-field-dim" class="btn btn-outline btn-full">
+                Apply New Field Dimensions
+              </button>
+            </div>
+
+            <div class="preset-links">
+              <button class="link-btn" id="btn-dim-fifa">FIFA Standard (105 × 68m)</button>
+              <button class="link-btn" id="btn-dim-training">Training / 7-a-side (60 × 40m)</button>
+              <button class="link-btn" id="btn-dim-futsal">5-a-side / Futsal (40 × 20m)</button>
+            </div>
+          </div>
+
+          <!-- Heatmap Mode Toggle -->
+          <div class="panel-card highlight-card">
+            <div class="card-header">
+              <span class="card-title">False-Color Heatmap Mode</span>
+              <span class="badge badge-pulse" id="heatmap-status-badge">Realistic</span>
+            </div>
+            <p class="card-desc">Instead of rendering realistic light on grass, this mode samples photometric illuminance (lux) across the entire pitch grid and renders an engineering heatmap.</p>
+
+            <div class="toggle-control-card">
+              <div class="toggle-text">
+                <div class="toggle-title">Show Heatmap Overlay</div>
+                <div class="toggle-subtitle">Blue = Unlit/Low | Green = Optimal | Red = High</div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="toggle-heatmap">
+                <span class="switch-slider"></span>
+              </label>
+            </div>
+
+            <div class="slider-group" style="margin-top: 14px;">
+              <div class="slider-header">
+                <span class="slider-label">Usable Lux Threshold (Target)</span>
+                <span class="slider-val" id="val-lux-threshold">50 lx</span>
+              </div>
+              <input type="range" id="slider-lux-threshold" min="10" max="250" step="5" value="50" class="range-slider">
+              <span class="slider-tip">Recreational: 50 lx | Amateur match: 100 lx | Pro TV broadcast: 500+ lx</span>
+            </div>
+          </div>
+
+          <!-- Pitch Environment Details -->
+          <div class="panel-card">
+            <div class="card-header">
+              <span class="card-title">Environment & Optics</span>
+            </div>
+            <div class="info-list">
+              <div class="info-item">
+                <span class="info-k">Ambient Light:</span>
+                <span class="info-v highlight-mono">0.00 lx (Pitch Black)</span>
+              </div>
+              <div class="info-item">
+                <span class="info-k">Attenuation Law:</span>
+                <span class="info-v highlight-mono">Inverse-Square (d⁻²)</span>
+              </div>
+              <div class="info-item">
+                <span class="info-k">Angular Falloff:</span>
+                <span class="info-v highlight-mono">Lambertian + Penumbra</span>
+              </div>
+              <div class="info-item">
+                <span class="info-k">Grid Sample Density:</span>
+                <span class="info-v highlight-mono" id="sample-density-val">1,200 evaluation points</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= TAB 3: REAL-TIME SCORE & AUTO-OPTIMIZER ================= -->
+        <section id="tab-solver" class="tab-pane">
+          <!-- Real-Time Metrics Card -->
+          <div class="panel-card live-score-card">
+            <div class="card-header">
+              <span class="card-title">Real-Time Illumination Score</span>
+              <span class="live-dot-wrap"><span class="live-dot"></span> LIVE</span>
+            </div>
+
+            <!-- Big Gauge / Hero Metric -->
+            <div class="score-hero">
+              <div class="score-circle-container">
+                <svg class="score-svg" viewBox="0 0 100 100">
+                  <circle class="score-bg-circle" cx="50" cy="50" r="42"></circle>
+                  <circle class="score-bar-circle" id="score-bar-circle" cx="50" cy="50" r="42" stroke-dasharray="263.89" stroke-dashoffset="263.89"></circle>
+                </svg>
+                <div class="score-number-wrap">
+                  <span class="score-number" id="coverage-percentage">0%</span>
+                  <span class="score-subtext">Coverage</span>
+                </div>
+              </div>
+
+              <div class="score-meta">
+                <div class="meta-row">
+                  <span class="meta-label">Min Threshold:</span>
+                  <span class="meta-val" id="meta-threshold-display">≥ 50 Lux</span>
+                </div>
+                <div class="meta-row">
+                  <span class="meta-label">Evaluation:</span>
+                  <span class="meta-val meta-grade" id="meta-rating-grade">Insufficient</span>
+                </div>
+                <div class="meta-row">
+                  <span class="meta-label">Target Area:</span>
+                  <span class="meta-val" id="meta-area-display">7,140 m²</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Detailed Metrics Grid -->
+            <div class="metrics-grid">
+              <div class="metric-box">
+                <span class="metric-label">Avg Illuminance</span>
+                <span class="metric-value" id="metric-avg-lux">0 <span class="unit">lx</span></span>
+              </div>
+              <div class="metric-box">
+                <span class="metric-label">Min Illuminance</span>
+                <span class="metric-value" id="metric-min-lux">0 <span class="unit">lx</span></span>
+              </div>
+              <div class="metric-box">
+                <span class="metric-label">Max Illuminance</span>
+                <span class="metric-value" id="metric-max-lux">0 <span class="unit">lx</span></span>
+              </div>
+              <div class="metric-box">
+                <span class="metric-label">Uniformity (Min/Avg)</span>
+                <span class="metric-value" id="metric-uniformity">0.00</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Auto-Optimize Solver Card -->
+          <div class="panel-card highlight-card solver-card">
+            <div class="card-header">
+              <div>
+                <span class="card-title">Auto-Optimize Solver</span>
+                <span class="card-tag gold-tag">Monte-Carlo & Annealing</span>
+              </div>
+            </div>
+            
+            <p class="card-desc">
+              Rapidly simulates hundreds of combinations of <strong>Z-Heights</strong> and <strong>Target Aims</strong> for active lights to find the configuration that maximizes field coverage and uniformity. Snaps UI sliders directly to the winning values.
+            </p>
+
+            <!-- Optimizer Options -->
+            <div class="solver-options">
+              <label class="checkbox-label">
+                <input type="checkbox" id="opt-allow-height" checked>
+                <span>Optimize Z-Heights (within physical stand bounds)</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="opt-reposition" checked>
+                <span>Smart aim distribution across field zones</span>
+              </label>
+            </div>
+
+            <div class="button-row" style="margin-top: 14px;">
+              <button id="btn-run-optimizer" class="btn btn-solver btn-full">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                Auto-Optimize Active Lights
+              </button>
+            </div>
+
+            <!-- Solver Progress Bar -->
+            <div id="solver-progress-box" class="solver-progress-box hidden">
+              <div class="solver-progress-header">
+                <span id="solver-progress-text">Simulating configurations...</span>
+                <span id="solver-progress-percent">0%</span>
+              </div>
+              <div class="progress-track">
+                <div class="progress-fill" id="solver-progress-fill"></div>
+              </div>
+              <div class="solver-stats-bar">
+                <span>Best Coverage: <strong id="solver-live-best">0.0%</strong></span>
+                <span>Eval: <span id="solver-eval-count">0</span></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Standards Compliance Card -->
+          <div class="panel-card compliance-card">
+            <div class="card-header">
+              <span class="card-title">Standards Compliance (FIFA / EN 12193)</span>
+              <span class="card-tag">Live Audit</span>
+            </div>
+            
+            <div class="compliance-list">
+              <div class="compliance-item" id="comp-fifa-1">
+                <div class="comp-left">
+                  <div class="comp-icon" id="comp-icon-1">✕</div>
+                  <div>
+                    <div class="comp-title">FIFA Class I: TV Broadcast</div>
+                    <div class="comp-req">Req: ≥ 500 lx, Uniformity ≥ 0.60</div>
+                  </div>
+                </div>
+                <span class="comp-status" id="comp-status-1">Fail</span>
+              </div>
+
+              <div class="compliance-item" id="comp-fifa-2">
+                <div class="comp-left">
+                  <div class="comp-icon" id="comp-icon-2">✕</div>
+                  <div>
+                    <div class="comp-title">FIFA Class II: Club Competition</div>
+                    <div class="comp-req">Req: ≥ 200 lx, Uniformity ≥ 0.50</div>
+                  </div>
+                </div>
+                <span class="comp-status" id="comp-status-2">Fail</span>
+              </div>
+
+              <div class="compliance-item" id="comp-fifa-3">
+                <div class="comp-left">
+                  <div class="comp-icon" id="comp-icon-3">✕</div>
+                  <div>
+                    <div class="comp-title">FIFA Class III: Team Training</div>
+                    <div class="comp-req">Req: ≥ 75 lx, Uniformity ≥ 0.40</div>
+                  </div>
+                </div>
+                <span class="comp-status" id="comp-status-3">Fail</span>
+              </div>
+
+              <div class="compliance-item" id="comp-en-amat">
+                <div class="comp-left">
+                  <div class="comp-icon" id="comp-icon-amat">✕</div>
+                  <div>
+                    <div class="comp-title">EN 12193: Recreational Play</div>
+                    <div class="comp-req">Req: ≥ 50 lx, Uniformity ≥ 0.30</div>
+                  </div>
+                </div>
+                <span class="comp-status" id="comp-status-amat">Fail</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+
+      <!-- Quick Summary Footer -->
+      <footer class="sidebar-footer">
+        <div class="footer-stats">
+          <span id="footer-summary-text">Pitch Black Night Simulator</span>
+        </div>
+      </footer>
+    </aside>
+  </div>
+
+  <!-- Application Logic Scripts -->
+  <script src="field.js"></script>
+  <script src="photometrics.js"></script>
+  <script src="heatmap.js"></script>
+  <script src="lights.js"></script>
+  <script src="optimizer.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
+
